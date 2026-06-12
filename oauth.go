@@ -7,6 +7,6 @@ const (
 	defaultClientSecret = "34ddeff2b558a23d38fba8a6de74f086ede1cc0b"
 	defaultGitHost      = "github.com"
 	defaultScopes       = "repo,read:org,gist,workflow"
-	defaultGitProtocol  = "https"
+	defaultGitProtocol  = ""
 	defaultListenAddr   = "0.0.0.0:8080"
 )
