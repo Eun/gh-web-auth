@@ -44,22 +44,24 @@ Unlike the previous version, this application does **not** shell out to the `gh`
 ## Quick start
 
 ```bash
-make run
+mise run run
 ```
 
 Open http://localhost:8080
 
-## Install as systemd service
+## Tasks
 
 ```bash
-sudo make install
+mise run build      # Build the binary
+mise run run        # Build and run
+mise run install    # Install as systemd service
+mise run uninstall  # Remove systemd service and binary
+mise run clean      # Remove build artifacts
 ```
 
-## Uninstall
+## Pinned tools
 
-```bash
-sudo make uninstall
-```
+Tool versions are pinned in `mise.toml`. Run `mise install` to set up the environment.
 
 ## Dependencies
 
@@ -80,6 +82,6 @@ gh-web-auth/
 ├── go.mod
 ├── go.sum
 ├── gh-web-auth.service  # systemd unit
-├── Makefile
+├── mise.toml            # pinned tool versions + tasks
 └── README.md
 ```
