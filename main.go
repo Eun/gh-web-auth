@@ -68,11 +68,23 @@ func corsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }
 
+// JSON response map keys.
+const (
+	keyError            = "error"
+	keyAuthenticated    = "authenticated"
+	keyUser             = "user"
+	keyScopes           = "scopes"
+	keySuccess          = "success"
+	msgMethodNotAllowed = "method not allowed"
+)
+
 func jsonResponse(w http.ResponseWriter, status int, v interface{}) {
 	corsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Printf("failed to encode JSON response: %v", err)
+	}
 }
 
 // handleStatus checks whether gh is authenticated using the stored token.
@@ -83,16 +95,16 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodGet {
-		jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{keyError: msgMethodNotAllowed})
 		return
 	}
 
 	token, username, err := getStoredToken(cfg.GitHost)
 	if err != nil || token == "" {
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			"authenticated": false,
-			"user":          "",
-			"scopes":        "",
+			keyAuthenticated: false,
+			keyUser:          "",
+			keyScopes:        "",
 		})
 		return
 	}
@@ -102,18 +114,18 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("Token validation failed: %v", err)
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			"authenticated": false,
-			"user":          username,
-			"scopes":        "",
-			"error":         "token expired or invalid",
+			keyAuthenticated: false,
+			keyUser:          username,
+			keyScopes:        "",
+			keyError:         "token expired or invalid",
 		})
 		return
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"authenticated": true,
-		"user":          username,
-		"scopes":        scopes,
+		keyAuthenticated: true,
+		keyUser:          username,
+		keyScopes:        scopes,
 	})
 }
 
@@ -213,7 +225,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodPost {
-		jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{keyError: msgMethodNotAllowed})
 		return
 	}
 
@@ -223,7 +235,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		if err.Error() == "login already in progress" {
 			status = http.StatusConflict
 		}
-		jsonResponse(w, status, map[string]string{"error": err.Error()})
+		jsonResponse(w, status, map[string]string{keyError: err.Error()})
 		return
 	}
 
@@ -240,7 +252,7 @@ func handlePoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodGet {
-		jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{keyError: msgMethodNotAllowed})
 		return
 	}
 
@@ -249,17 +261,17 @@ func handlePoll(w http.ResponseWriter, r *http.Request) {
 
 	if !session.active {
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			"done":    false,
-			"success": false,
-			"error":   "no active login session",
+			"done":     false,
+			keySuccess: false,
+			keyError:   "no active login session",
 		})
 		return
 	}
 
 	resp := map[string]interface{}{
-		"done":    session.done,
-		"success": session.success,
-		"error":   session.errMsg,
+		"done":     session.done,
+		keySuccess: session.success,
+		keyError:   session.errMsg,
 	}
 
 	if session.done {
@@ -276,13 +288,13 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodPost {
-		jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{keyError: msgMethodNotAllowed})
 		return
 	}
 
 	err := removeHost(cfg.GitHost)
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success": err == nil,
+		keySuccess: err == nil,
 	})
 }
 
@@ -306,7 +318,7 @@ func handleReauth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodPost {
-		jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{keyError: msgMethodNotAllowed})
 		return
 	}
 
@@ -315,7 +327,7 @@ func handleReauth(w http.ResponseWriter, r *http.Request) {
 
 	code, url, err := startDeviceFlow()
 	if err != nil {
-		jsonResponse(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		jsonResponse(w, http.StatusInternalServerError, map[string]string{keyError: err.Error()})
 		return
 	}
 
@@ -422,8 +434,9 @@ func main() {
 			mux.HandleFunc("/api/reauth", handleReauth)
 
 			srv := &http.Server{
-				Addr:    cfg.ListenAddr,
-				Handler: mux,
+				Addr:              cfg.ListenAddr,
+				Handler:           mux,
+				ReadHeaderTimeout: 10 * time.Second,
 			}
 
 			// Graceful shutdown on SIGINT/SIGTERM.
@@ -435,7 +448,9 @@ func main() {
 				killActiveSession()
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
-				srv.Shutdown(ctx)
+				if err := srv.Shutdown(ctx); err != nil {
+					log.Printf("server shutdown error: %v", err)
+				}
 			}()
 
 			log.Printf("Starting gh-web-auth on %s", cfg.ListenAddr)

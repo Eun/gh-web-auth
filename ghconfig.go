@@ -63,7 +63,7 @@ func writeHostsConfig(cfg HostsConfig) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	data, err := yaml.Marshal(cfg)
+	data, err := yaml.Marshal(cfg) //nolint:gosec // Intentional: writing oauth_token to gh config file.
 	if err != nil {
 		return err
 	}
