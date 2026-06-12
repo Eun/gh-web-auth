@@ -12,7 +12,7 @@ linters-settings:
     lines: 150
     statements: 80
   gci:
-    local-prefixes: ${GoPackageName}
+    local-prefixes: github.com/Eun/gh-web-auth
   gocognit:
     min-complexity: 30
   nestif:
@@ -40,7 +40,7 @@ linters-settings:
   gofmt:
     simplify: true
   goimports:
-    local-prefixes: ${GoPackageName}
+    local-prefixes: github.com/Eun/gh-web-auth
   govet:
     check-shadowing: true
   lll:

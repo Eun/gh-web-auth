@@ -1,8 +1,8 @@
-project_name: "${ProjectName}"
+project_name: "gh-web-auth"
 builds:
   -
-    id: "${ProjectName}"
-    binary: "${ProjectName}"
+    id: "gh-web-auth"
+    binary: "gh-web-auth"
     env:
       - "CGO_ENABLED=0"
     goos:
@@ -18,7 +18,7 @@ builds:
       - -X "main.commit={{.Commit}}"
       - -X "main.date={{.Date}}"
 archives:
-  - name_template: "${ProjectName}_{{.Version}}_{{.Os}}_{{.Arch}}"
+  - name_template: "gh-web-auth_{{.Version}}_{{.Os}}_{{.Arch}}"
 checksum:
   name_template: 'checksums.txt'
 snapshot:
@@ -27,24 +27,24 @@ changelog:
   skip: true
 nfpms:
   -
-    id: "${ProjectName}"
-    package_name: "${ProjectName}"
-    homepage: "${HomePage}"
-    maintainer: "${Author} <${AuthorEmail}>"
-    description: "${Description}"
+    id: "gh-web-auth"
+    package_name: "gh-web-auth"
+    homepage: "https://github.com/Eun/gh-web-auth"
+    maintainer: "Tobias Salzmann <tobias@salzmann.berlin>"
+    description: "Web UI for GitHub CLI authentication via OAuth device flow"
     license: "MIT"
     formats:
       - "deb"
     epoch: 1
 dockers:
   -
-    id: "${ProjectName}-amd64"
+    id: "gh-web-auth-amd64"
     goos: "linux"
     goarch: "amd64"
     ids:
-      - "${ProjectName}"
+      - "gh-web-auth"
     image_templates:
-      - "${DockerImage}:{{.Tag}}-amd64"
+      - "ghcr.io/eun/gh-web-auth:{{.Tag}}-amd64"
     skip_push: false
     dockerfile: ".github/Dockerfile"
     use: buildx
@@ -54,16 +54,16 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--build-arg=BINARY=${ProjectName}"
+      - "--build-arg=BINARY=gh-web-auth"
       - "--platform=linux/amd64"
   -
-    id: "${ProjectName}-arm64"
+    id: "gh-web-auth-arm64"
     goos: "linux"
     goarch: "arm64"
     ids:
-      - "${ProjectName}"
+      - "gh-web-auth"
     image_templates:
-      - "${DockerImage}:{{.Tag}}-arm64"
+      - "ghcr.io/eun/gh-web-auth:{{.Tag}}-arm64"
     skip_push: false
     dockerfile: ".github/Dockerfile"
     use: buildx
@@ -73,26 +73,26 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--build-arg=BINARY=${ProjectName}"
+      - "--build-arg=BINARY=gh-web-auth"
       - "--platform=linux/arm64"
 docker_manifests:
   -
-    name_template: "${DockerImage}:{{.Tag}}"
+    name_template: "ghcr.io/eun/gh-web-auth:{{.Tag}}"
     image_templates:
-      - "${DockerImage}:{{.Tag}}-amd64"
-      - "${DockerImage}:{{.Tag}}-arm64"
+      - "ghcr.io/eun/gh-web-auth:{{.Tag}}-amd64"
+      - "ghcr.io/eun/gh-web-auth:{{.Tag}}-arm64"
   -
-    name_template: "${DockerImage}:{{.Major}}"
+    name_template: "ghcr.io/eun/gh-web-auth:{{.Major}}"
     image_templates:
-      - "${DockerImage}:{{.Tag}}-amd64"
-      - "${DockerImage}:{{.Tag}}-arm64"
+      - "ghcr.io/eun/gh-web-auth:{{.Tag}}-amd64"
+      - "ghcr.io/eun/gh-web-auth:{{.Tag}}-arm64"
   -
-    name_template: "${DockerImage}:{{.Major}}.{{.Minor}}"
+    name_template: "ghcr.io/eun/gh-web-auth:{{.Major}}.{{.Minor}}"
     image_templates:
-      - "${DockerImage}:{{.Tag}}-amd64"
-      - "${DockerImage}:{{.Tag}}-arm64"
+      - "ghcr.io/eun/gh-web-auth:{{.Tag}}-amd64"
+      - "ghcr.io/eun/gh-web-auth:{{.Tag}}-arm64"
   -
-    name_template: "${DockerImage}:latest"
+    name_template: "ghcr.io/eun/gh-web-auth:latest"
     image_templates:
-      - "${DockerImage}:{{.Tag}}-amd64"
-      - "${DockerImage}:{{.Tag}}-arm64"
+      - "ghcr.io/eun/gh-web-auth:{{.Tag}}-amd64"
+      - "ghcr.io/eun/gh-web-auth:{{.Tag}}-arm64"

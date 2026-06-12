@@ -1,0 +1,20 @@
+[tools]
+go = "1.22.2"
+golangci-lint = "latest"
+goreleaser = "latest"
+
+[tasks.build]
+description = "Build the gh-web-auth binary"
+run = "go build -o gh-web-auth ."
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "golangci-lint run ./..."
+
+[tasks.release]
+description = "Run GoReleaser (snapshot)"
+run = "goreleaser release --snapshot --clean"
+
+[tasks.clean]
+description = "Remove build artifacts"
+run = "rm -rf gh-web-auth dist"
