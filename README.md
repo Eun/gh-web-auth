@@ -32,6 +32,8 @@ All settings can be provided as CLI flags or environment variables. Flags take p
 | Flag | Env Var | Default | Description |
 |---|---|---|---|
 | `--listen-addr` | `GH_WEB_AUTH_LISTEN_ADDR` | `0.0.0.0:8080` | Address to listen on |
+| `--base-path` | `GH_WEB_AUTH_BASE_PATH` | `/` | URL prefix the browser uses when calling the API |
+| `--backend-prefix` | `GH_WEB_AUTH_BACKEND_PREFIX` | `/` | Path prefix the server strips from incoming requests |
 | `--gh-config-dir` | `GH_CONFIG_DIR` | `~/.config/gh` | gh config directory |
 | `--gh-host` | `GH_HOST` | `github.com` | GitHub hostname (supports GHES) |
 | `--gh-client-id` | `GH_CLIENT_ID` | `178c6fc778ccc68e1d6a` | OAuth client ID |
@@ -80,6 +82,53 @@ Download the appropriate binary from the [releases page](https://github.com/Eun/
 ## No `gh` binary required
 
 This application does **not** shell out to the `gh` CLI. It performs the full OAuth device flow natively using the `cli/oauth` library and writes the config file directly. The `gh` binary is only needed downstream by the user for their actual GitHub operations.
+
+## Deployment / reverse-proxy examples
+
+`--base-path` and `--backend-prefix` serve different purposes:
+
+| Flag | Purpose | Affects |
+|---|---|---|
+| `--base-path` | URL prefix the **browser** prepends to every `fetch()` call | Frontend only |
+| `--backend-prefix` | Path prefix the **server** strips from incoming requests via `http.StripPrefix` | Backend only |
+
+### Direct access (no proxy)
+
+Both flags stay at the default `/`:
+
+```bash
+gh-web-auth --listen-addr 0.0.0.0:8080
+# Browser: http://host:8080/
+```
+
+### Proxy that strips the prefix (e.g. Coder)
+
+The reverse proxy rewrites `/gh-web-auth/` to `/` before forwarding.
+The server receives bare paths, so `--backend-prefix` stays `/`.
+The browser still needs the full path:
+
+```bash
+gh-web-auth \
+  --base-path /gh-web-auth/ \
+  --backend-prefix /
+# Proxy rule: /gh-web-auth/* → http://backend:8080/*
+# Browser fetches /gh-web-auth/api/status
+# Server sees /api/status (proxy already stripped the prefix)
+```
+
+### Proxy that preserves the prefix (e.g. nginx `proxy_pass` without trailing slash)
+
+The reverse proxy forwards the original path unchanged.
+The server must strip the prefix itself:
+
+```bash
+gh-web-auth \
+  --base-path /gh-web-auth/ \
+  --backend-prefix /gh-web-auth/
+# nginx: proxy_pass http://backend:8080;   (no trailing slash)
+# Browser fetches /gh-web-auth/api/status
+# Server receives /gh-web-auth/api/status → StripPrefix → /api/status
+```
 
 ## Endpoints
 

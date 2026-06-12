@@ -36,6 +36,7 @@ var staticFiles embed.FS
 type AppConfig struct {
 	ListenAddr    string
 	BasePath      string
+	BackendPrefix string
 	GHConfigDir   string
 	GitHost       string
 	GitHostURL    string
@@ -364,9 +365,19 @@ func initConfig(c *cli.Context) {
 		basePath += "/"
 	}
 
+	// Normalize backend prefix: ensure it starts and ends with /.
+	backendPrefix := c.String("backend-prefix")
+	if !strings.HasPrefix(backendPrefix, "/") {
+		backendPrefix = "/" + backendPrefix
+	}
+	if !strings.HasSuffix(backendPrefix, "/") {
+		backendPrefix += "/"
+	}
+
 	cfg = &AppConfig{
 		ListenAddr:    c.String("listen-addr"),
 		BasePath:      basePath,
+		BackendPrefix: backendPrefix,
 		GHConfigDir:   c.String("gh-config-dir"),
 		GitHost:       host,
 		GitHostURL:    gitHostURL,
@@ -377,6 +388,31 @@ func initConfig(c *cli.Context) {
 		Scopes:        strings.Split(c.String("gh-scopes"), ","),
 		GitProtocol:   c.String("gh-git-protocol"),
 	}
+}
+
+// responseWriter wraps http.ResponseWriter to capture the status code.
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func newResponseWriter(w http.ResponseWriter) *responseWriter {
+	return &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+// loggingMiddleware logs method, path, status and duration of every request.
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rw := newResponseWriter(w)
+		next.ServeHTTP(rw, r)
+		log.Printf("%s %s %d %s", r.Method, r.URL.Path, rw.statusCode, time.Since(start)) //nolint:gosec // Not user-controlled format string.
+	})
 }
 
 func main() {
@@ -396,6 +432,12 @@ func main() {
 				EnvVars: []string{"GH_WEB_AUTH_BASE_PATH"},
 				Value:   defaultBasePath,
 				Usage:   "Base URL path prefix (e.g. /gh-web-auth/custom/)",
+			},
+			&cli.StringFlag{
+				Name:    "backend-prefix",
+				EnvVars: []string{"GH_WEB_AUTH_BACKEND_PREFIX"},
+				Value:   defaultBackendPrefix,
+				Usage:   "Path prefix the server strips from incoming requests",
 			},
 			&cli.StringFlag{
 				Name:    "gh-config-dir",
@@ -481,11 +523,14 @@ func main() {
 			mux.HandleFunc("/api/logout", handleLogout)
 			mux.HandleFunc("/api/reauth", handleReauth)
 
-			// Wrap mux with StripPrefix so it works behind a base path.
+			// Optionally strip a backend prefix from incoming requests.
 			var handler http.Handler = mux
-			if cfg.BasePath != "/" {
-				handler = http.StripPrefix(strings.TrimRight(cfg.BasePath, "/"), mux)
+			if cfg.BackendPrefix != "/" {
+				handler = http.StripPrefix(
+					strings.TrimRight(cfg.BackendPrefix, "/"), mux,
+				)
 			}
+			handler = loggingMiddleware(handler)
 
 			srv := &http.Server{
 				Addr:              cfg.ListenAddr,
@@ -507,7 +552,10 @@ func main() {
 				}
 			}()
 
-			log.Printf("Starting gh-web-auth on %s (base-path: %s)", cfg.ListenAddr, cfg.BasePath)
+			log.Printf(
+				"Starting gh-web-auth on %s (base-path: %s, backend-prefix: %s)",
+				cfg.ListenAddr, cfg.BasePath, cfg.BackendPrefix,
+			)
 			if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 				return err
 			}
