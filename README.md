@@ -95,7 +95,8 @@ This application does **not** shell out to the `gh` CLI. It performs the full OA
 ## Quick start
 
 ```bash
-go build -o gh-web-auth .
+mise install   # install Go, golangci-lint, goreleaser
+mise run build
 ./gh-web-auth
 ```
 
@@ -112,7 +113,7 @@ Releases are managed via [GoReleaser](https://goreleaser.com/) and GitHub Action
 
 ## Dependencies
 
-- Go 1.22+ (build-time only)
+- Go 1.22+ (pinned via mise.toml) (build-time only)
 - `github.com/cli/oauth` v1.2.2 — GitHub OAuth device/web-app flow
 - `github.com/urfave/cli/v2` — CLI flag and environment variable parsing
 - `gopkg.in/yaml.v3` — YAML serialization for gh config
@@ -127,7 +128,7 @@ gh-web-auth/
 ├── ghconfig.go                          # Read/write ~/.config/gh/hosts.yml
 ├── static/
 │   └── index.html                       # Single-page web UI
-├── .env                                 # Build variables for CI (envsubst)
+├── mise.toml                            # Tool versions + tasks (build, lint, release, clean)
 ├── .goreleaser.yml                      # GoReleaser config (multi-arch Docker + deb)
 ├── .golangci.yml                        # Linter configuration
 ├── .github/
