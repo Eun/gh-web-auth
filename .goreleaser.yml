@@ -1,0 +1,98 @@
+project_name: "${ProjectName}"
+builds:
+  -
+    id: "${ProjectName}"
+    binary: "${ProjectName}"
+    env:
+      - "CGO_ENABLED=0"
+    goos:
+      - "linux"
+      - "darwin"
+    goarch:
+      - "amd64"
+      - "arm64"
+    ldflags:
+      - -s
+      - -w
+      - -X "main.version={{.Version}}"
+      - -X "main.commit={{.Commit}}"
+      - -X "main.date={{.Date}}"
+archives:
+  - name_template: "${ProjectName}_{{.Version}}_{{.Os}}_{{.Arch}}"
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{.Tag}}-next"
+changelog:
+  skip: true
+nfpms:
+  -
+    id: "${ProjectName}"
+    package_name: "${ProjectName}"
+    homepage: "${HomePage}"
+    maintainer: "${Author} <${AuthorEmail}>"
+    description: "${Description}"
+    license: "MIT"
+    formats:
+      - "deb"
+    epoch: 1
+dockers:
+  -
+    id: "${ProjectName}-amd64"
+    goos: "linux"
+    goarch: "amd64"
+    ids:
+      - "${ProjectName}"
+    image_templates:
+      - "${DockerImage}:{{.Tag}}-amd64"
+    skip_push: false
+    dockerfile: ".github/Dockerfile"
+    use: buildx
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--build-arg=BINARY=${ProjectName}"
+      - "--platform=linux/amd64"
+  -
+    id: "${ProjectName}-arm64"
+    goos: "linux"
+    goarch: "arm64"
+    ids:
+      - "${ProjectName}"
+    image_templates:
+      - "${DockerImage}:{{.Tag}}-arm64"
+    skip_push: false
+    dockerfile: ".github/Dockerfile"
+    use: buildx
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--build-arg=BINARY=${ProjectName}"
+      - "--platform=linux/arm64"
+docker_manifests:
+  -
+    name_template: "${DockerImage}:{{.Tag}}"
+    image_templates:
+      - "${DockerImage}:{{.Tag}}-amd64"
+      - "${DockerImage}:{{.Tag}}-arm64"
+  -
+    name_template: "${DockerImage}:{{.Major}}"
+    image_templates:
+      - "${DockerImage}:{{.Tag}}-amd64"
+      - "${DockerImage}:{{.Tag}}-arm64"
+  -
+    name_template: "${DockerImage}:{{.Major}}.{{.Minor}}"
+    image_templates:
+      - "${DockerImage}:{{.Tag}}-amd64"
+      - "${DockerImage}:{{.Tag}}-arm64"
+  -
+    name_template: "${DockerImage}:latest"
+    image_templates:
+      - "${DockerImage}:{{.Tag}}-amd64"
+      - "${DockerImage}:{{.Tag}}-arm64"

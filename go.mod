@@ -1,4 +1,4 @@
-module gh-web-auth
+module github.com/Eun/gh-web-auth
 
 go 1.22.2
 

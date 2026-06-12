@@ -20,6 +20,13 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+// Build-time variables, injected via ldflags.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 //go:embed static
 var staticFiles embed.FS
 
@@ -320,8 +327,9 @@ func handleReauth(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	app := &cli.App{
-		Name:  "gh-web-auth",
-		Usage: "Web UI for GitHub CLI authentication via OAuth device flow",
+		Name:    "gh-web-auth",
+		Usage:   "Web UI for GitHub CLI authentication via OAuth device flow",
+		Version: version + " (" + commit + ") " + date,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "listen-addr",
