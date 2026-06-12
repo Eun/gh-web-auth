@@ -4,23 +4,41 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/cli/oauth"
 	"github.com/cli/oauth/device"
+	"github.com/urfave/cli/v2"
 )
 
 //go:embed static
 var staticFiles embed.FS
+
+// AppConfig holds all runtime configuration, populated from CLI flags / env vars.
+type AppConfig struct {
+	ListenAddr    string
+	GHConfigDir   string
+	GitHost       string
+	GitHostURL    string
+	APIRESTPrefix string
+	GraphQLURL    string
+	ClientID      string
+	ClientSecret  string
+	Scopes        []string
+	GitProtocol   string
+}
+
+// cfg is the package-level configuration, set once in main before the server starts.
+var cfg *AppConfig
 
 // LoginSession holds state for an in-progress device flow.
 type LoginSession struct {
@@ -62,7 +80,7 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, username, err := getStoredToken(oauthHost)
+	token, username, err := getStoredToken(cfg.GitHost)
 	if err != nil || token == "" {
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
 			"authenticated": false,
@@ -115,7 +133,7 @@ func startDeviceFlow() (code, url string, err error) {
 	session.cancel = cancel
 	session.mu.Unlock()
 
-	host, err := oauth.NewGitHubHost(oauthHostURL)
+	host, err := oauth.NewGitHubHost(cfg.GitHostURL)
 	if err != nil {
 		session.mu.Lock()
 		session.active = false
@@ -125,7 +143,7 @@ func startDeviceFlow() (code, url string, err error) {
 	}
 
 	// Step 1: Request the device code from GitHub.
-	codeResp, err := device.RequestCode(http.DefaultClient, host.DeviceCodeURL, oauthClientID, defaultScopes)
+	codeResp, err := device.RequestCode(http.DefaultClient, host.DeviceCodeURL, cfg.ClientID, cfg.Scopes)
 	if err != nil {
 		session.mu.Lock()
 		session.active = false
@@ -144,7 +162,7 @@ func startDeviceFlow() (code, url string, err error) {
 		defer cancel()
 
 		accessToken, err := device.Wait(ctx, http.DefaultClient, host.TokenURL, device.WaitOptions{
-			ClientID:   oauthClientID,
+			ClientID:   cfg.ClientID,
 			DeviceCode: codeResp,
 		})
 
@@ -168,7 +186,7 @@ func startDeviceFlow() (code, url string, err error) {
 		}
 
 		// Store the token in gh's config format.
-		if saveErr := saveToken(oauthHost, username, accessToken.Token, "https"); saveErr != nil {
+		if saveErr := saveToken(cfg.GitHost, username, accessToken.Token, cfg.GitProtocol); saveErr != nil {
 			session.success = false
 			session.errMsg = fmt.Sprintf("token obtained but failed to save: %v", saveErr)
 			return
@@ -255,7 +273,7 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := removeHost(oauthHost)
+	err := removeHost(cfg.GitHost)
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
 		"success": err == nil,
 	})
@@ -286,7 +304,7 @@ func handleReauth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	killActiveSession()
-	_ = removeHost(oauthHost)
+	_ = removeHost(cfg.GitHost)
 
 	code, url, err := startDeviceFlow()
 	if err != nil {
@@ -301,47 +319,126 @@ func handleReauth(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	daemon := flag.Bool("daemon", false, "Run as daemon (use systemd for process management)")
-	flag.Parse()
+	app := &cli.App{
+		Name:  "gh-web-auth",
+		Usage: "Web UI for GitHub CLI authentication via OAuth device flow",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "listen-addr",
+				EnvVars: []string{"GH_WEB_AUTH_LISTEN_ADDR"},
+				Value:   defaultListenAddr,
+				Usage:   "Address to listen on",
+			},
+			&cli.StringFlag{
+				Name:    "gh-config-dir",
+				EnvVars: []string{"GH_CONFIG_DIR"},
+				Value:   "",
+				Usage:   "gh config directory",
+			},
+			&cli.StringFlag{
+				Name:    "gh-host",
+				EnvVars: []string{"GH_HOST"},
+				Value:   defaultGitHost,
+				Usage:   "GitHub hostname",
+			},
+			&cli.StringFlag{
+				Name:    "gh-client-id",
+				EnvVars: []string{"GH_CLIENT_ID"},
+				Value:   defaultClientID,
+				Usage:   "OAuth client ID",
+			},
+			&cli.StringFlag{
+				Name:    "gh-client-secret",
+				EnvVars: []string{"GH_CLIENT_SECRET"},
+				Value:   defaultClientSecret,
+				Usage:   "OAuth client secret",
+			},
+			&cli.StringFlag{
+				Name:    "gh-scopes",
+				EnvVars: []string{"GH_SCOPES"},
+				Value:   defaultScopes,
+				Usage:   "Comma-separated OAuth scopes",
+			},
+			&cli.StringFlag{
+				Name:    "gh-git-protocol",
+				EnvVars: []string{"GH_GIT_PROTOCOL"},
+				Value:   defaultGitProtocol,
+				Usage:   "Git protocol (https or ssh)",
+			},
+		},
+		Action: func(c *cli.Context) error {
+			host := c.String("gh-host")
 
-	if *daemon {
-		log.Println("Daemon mode: use systemd or similar for process management")
+			// Derive host-dependent URLs.
+			gitHostURL := "https://" + host
+			var apiRESTPrefix, graphQLURL string
+			if host == "github.com" {
+				apiRESTPrefix = "https://api.github.com/"
+				graphQLURL = "https://api.github.com/graphql"
+			} else {
+				apiRESTPrefix = "https://" + host + "/api/v3/"
+				graphQLURL = "https://" + host + "/api/graphql"
+			}
+
+			cfg = &AppConfig{
+				ListenAddr:    c.String("listen-addr"),
+				GHConfigDir:   c.String("gh-config-dir"),
+				GitHost:       host,
+				GitHostURL:    gitHostURL,
+				APIRESTPrefix: apiRESTPrefix,
+				GraphQLURL:    graphQLURL,
+				ClientID:      c.String("gh-client-id"),
+				ClientSecret:  c.String("gh-client-secret"),
+				Scopes:        strings.Split(c.String("gh-scopes"), ","),
+				GitProtocol:   c.String("gh-git-protocol"),
+			}
+
+			// Propagate GH_CONFIG_DIR so ghconfig.go picks it up.
+			if cfg.GHConfigDir != "" {
+				os.Setenv("GH_CONFIG_DIR", cfg.GHConfigDir)
+			}
+
+			mux := http.NewServeMux()
+
+			// Serve embedded static files.
+			staticFS, err := fs.Sub(staticFiles, "static")
+			if err != nil {
+				log.Fatalf("failed to create sub filesystem: %v", err)
+			}
+			mux.Handle("/", http.FileServer(http.FS(staticFS)))
+
+			mux.HandleFunc("/api/status", handleStatus)
+			mux.HandleFunc("/api/login", handleLogin)
+			mux.HandleFunc("/api/login/poll", handlePoll)
+			mux.HandleFunc("/api/logout", handleLogout)
+			mux.HandleFunc("/api/reauth", handleReauth)
+
+			srv := &http.Server{
+				Addr:    cfg.ListenAddr,
+				Handler: mux,
+			}
+
+			// Graceful shutdown on SIGINT/SIGTERM.
+			go func() {
+				sigCh := make(chan os.Signal, 1)
+				signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+				<-sigCh
+				log.Println("Shutting down...")
+				killActiveSession()
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				srv.Shutdown(ctx)
+			}()
+
+			log.Printf("Starting gh-web-auth on %s", cfg.ListenAddr)
+			if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+				return err
+			}
+			return nil
+		},
 	}
 
-	mux := http.NewServeMux()
-
-	// Serve embedded static files.
-	staticFS, err := fs.Sub(staticFiles, "static")
-	if err != nil {
-		log.Fatalf("failed to create sub filesystem: %v", err)
-	}
-	mux.Handle("/", http.FileServer(http.FS(staticFS)))
-
-	mux.HandleFunc("/api/status", handleStatus)
-	mux.HandleFunc("/api/login", handleLogin)
-	mux.HandleFunc("/api/login/poll", handlePoll)
-	mux.HandleFunc("/api/logout", handleLogout)
-	mux.HandleFunc("/api/reauth", handleReauth)
-
-	srv := &http.Server{
-		Addr:    "0.0.0.0:8080",
-		Handler: mux,
-	}
-
-	// Graceful shutdown on SIGINT/SIGTERM.
-	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-		<-sigCh
-		log.Println("Shutting down...")
-		killActiveSession()
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		srv.Shutdown(ctx)
-	}()
-
-	log.Println("Starting gh-web-auth on 0.0.0.0:8080")
-	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}
 }
