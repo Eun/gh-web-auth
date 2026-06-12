@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io/fs"
 	"log"
 	"net/http"
@@ -33,6 +35,7 @@ var staticFiles embed.FS
 // AppConfig holds all runtime configuration, populated from CLI flags / env vars.
 type AppConfig struct {
 	ListenAddr    string
+	BasePath      string
 	GHConfigDir   string
 	GitHost       string
 	GitHostURL    string
@@ -350,6 +353,12 @@ func main() {
 				Usage:   "Address to listen on",
 			},
 			&cli.StringFlag{
+				Name:    "base-path",
+				EnvVars: []string{"GH_WEB_AUTH_BASE_PATH"},
+				Value:   defaultBasePath,
+				Usage:   "Base URL path prefix (e.g. /gh-web-auth/custom/)",
+			},
+			&cli.StringFlag{
 				Name:    "gh-config-dir",
 				EnvVars: []string{"GH_CONFIG_DIR"},
 				Value:   "",
@@ -400,8 +409,18 @@ func main() {
 				graphQLURL = "https://" + host + "/api/graphql"
 			}
 
+			// Normalize base path: ensure it starts and ends with /.
+			basePath := c.String("base-path")
+			if !strings.HasPrefix(basePath, "/") {
+				basePath = "/" + basePath
+			}
+			if !strings.HasSuffix(basePath, "/") {
+				basePath = basePath + "/"
+			}
+
 			cfg = &AppConfig{
 				ListenAddr:    c.String("listen-addr"),
+				BasePath:      basePath,
 				GHConfigDir:   c.String("gh-config-dir"),
 				GitHost:       host,
 				GitHostURL:    gitHostURL,
@@ -420,12 +439,37 @@ func main() {
 
 			mux := http.NewServeMux()
 
-			// Serve embedded static files.
+			// Serve embedded static files (except index.html which is templated).
 			staticFS, err := fs.Sub(staticFiles, "static")
 			if err != nil {
 				log.Fatalf("failed to create sub filesystem: %v", err)
 			}
-			mux.Handle("/", http.FileServer(http.FS(staticFS)))
+
+			// Parse and render index.html as a template with the base path.
+			indexBytes, err := fs.ReadFile(staticFS, "index.html")
+			if err != nil {
+				log.Fatalf("failed to read index.html: %v", err)
+			}
+			tmpl, err := template.New("index").Parse(string(indexBytes))
+			if err != nil {
+				log.Fatalf("failed to parse index.html template: %v", err)
+			}
+			var renderedIndex bytes.Buffer
+			if err := tmpl.Execute(&renderedIndex, map[string]string{"BasePath": cfg.BasePath}); err != nil {
+				log.Fatalf("failed to render index.html template: %v", err)
+			}
+			renderedIndexBytes := renderedIndex.Bytes()
+
+			// Serve index.html from the rendered template.
+			mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/" && r.URL.Path != "/index.html" {
+					// Serve other static files from the embedded FS.
+					http.FileServer(http.FS(staticFS)).ServeHTTP(w, r)
+					return
+				}
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.Write(renderedIndexBytes)
+			})
 
 			mux.HandleFunc("/api/status", handleStatus)
 			mux.HandleFunc("/api/login", handleLogin)
@@ -433,9 +477,15 @@ func main() {
 			mux.HandleFunc("/api/logout", handleLogout)
 			mux.HandleFunc("/api/reauth", handleReauth)
 
+			// Wrap mux with StripPrefix so it works behind a base path.
+			var handler http.Handler = mux
+			if cfg.BasePath != "/" {
+				handler = http.StripPrefix(strings.TrimRight(cfg.BasePath, "/"), mux)
+			}
+
 			srv := &http.Server{
 				Addr:              cfg.ListenAddr,
-				Handler:           mux,
+				Handler:           handler,
 				ReadHeaderTimeout: 10 * time.Second,
 			}
 
@@ -453,7 +503,7 @@ func main() {
 				}
 			}()
 
-			log.Printf("Starting gh-web-auth on %s", cfg.ListenAddr)
+			log.Printf("Starting gh-web-auth on %s (base-path: %s)", cfg.ListenAddr, cfg.BasePath)
 			if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 				return err
 			}
