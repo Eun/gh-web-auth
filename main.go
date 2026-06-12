@@ -481,15 +481,9 @@ func main() {
 			mux.HandleFunc("/api/logout", handleLogout)
 			mux.HandleFunc("/api/reauth", handleReauth)
 
-			// Wrap mux with StripPrefix so it works behind a base path.
-			var handler http.Handler = mux
-			if cfg.BasePath != "/" {
-				handler = http.StripPrefix(strings.TrimRight(cfg.BasePath, "/"), mux)
-			}
-
 			srv := &http.Server{
 				Addr:              cfg.ListenAddr,
-				Handler:           handler,
+				Handler:           mux,
 				ReadHeaderTimeout: 10 * time.Second,
 			}
 
