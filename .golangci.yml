@@ -1,72 +1,6 @@
-linters-settings:
-  dogsled:
-    max-blank-identifiers: 2
-  dupl:
-    threshold: 100
-  errcheck:
-    check-type-assertions: false
-    check-blank: false
-  exhaustive:
-    default-signifies-exhaustive: false
-  funlen:
-    lines: 150
-    statements: 80
-  gci:
-    local-prefixes: github.com/Eun/gh-web-auth
-  gocognit:
-    min-complexity: 30
-  nestif:
-    min-complexity: 5
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - dupImport
-      - ifElseChain
-      - octalLiteral
-      - whyNoLint
-      - wrapperFunc
-  gocyclo:
-    min-complexity: 30
-  godot:
-    check-all: false
-  gofmt:
-    simplify: true
-  goimports:
-    local-prefixes: github.com/Eun/gh-web-auth
-  govet:
-    check-shadowing: true
-  lll:
-    line-length: 140
-    tab-width: 1
-  misspell:
-    locale: US
-  nakedret:
-    max-func-lines: 30
-  prealloc:
-    simple: true
-    range-loops: true
-    for-loops: false
-  nolintlint:
-    allow-unused: false
-    allow-leading-space: true
-    allow-no-explanation: []
-    require-explanation: true
-    require-specific: true
-  unparam:
-    check-exported: false
-  unused:
-    check-exported: false
-
+version: "2"
 linters:
-  disable-all: true
+  default: none
   enable:
     - bodyclose
     - dogsled
@@ -80,29 +14,102 @@ linters:
     - gocritic
     - gocyclo
     - godot
-    - gofmt
-    - goimports
     - goprintffuncname
     - gosec
-    - gosimple
     - govet
     - ineffassign
     - lll
     - misspell
-    - nestif
     - nakedret
+    - nestif
     - noctx
     - nolintlint
     - prealloc
     - revive
     - staticcheck
-    - stylecheck
-    - typecheck
     - unconvert
     - unparam
     - unused
     - whitespace
-
+  settings:
+    dogsled:
+      max-blank-identifiers: 2
+    dupl:
+      threshold: 100
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+    exhaustive:
+      default-signifies-exhaustive: false
+    funlen:
+      lines: 150
+      statements: 80
+    gocognit:
+      min-complexity: 30
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    gocritic:
+      disabled-checks:
+        - dupImport
+        - ifElseChain
+        - octalLiteral
+        - whyNoLint
+        - wrapperFunc
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+    gocyclo:
+      min-complexity: 30
+    lll:
+      line-length: 140
+      tab-width: 1
+    misspell:
+      locale: US
+    nakedret:
+      max-func-lines: 30
+    nestif:
+      min-complexity: 5
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+    prealloc:
+      simple: true
+      range-loops: true
+      for-loops: false
+    unparam:
+      check-exported: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/Eun/gh-web-auth
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

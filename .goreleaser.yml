@@ -1,3 +1,4 @@
+version: 2
 project_name: "gh-web-auth"
 builds:
   -
@@ -22,9 +23,9 @@ archives:
 checksum:
   name_template: 'checksums.txt'
 snapshot:
-  name_template: "{{.Tag}}-next"
+  version_template: "{{.Tag}}-next"
 changelog:
-  skip: true
+  disable: true
 nfpms:
   -
     id: "gh-web-auth"
