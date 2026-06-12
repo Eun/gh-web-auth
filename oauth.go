@@ -9,4 +9,5 @@ const (
 	defaultScopes       = "repo,read:org,gist,workflow"
 	defaultGitProtocol  = ""
 	defaultListenAddr   = "0.0.0.0:8080"
+	defaultBasePath     = "/"
 )

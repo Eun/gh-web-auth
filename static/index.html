@@ -331,8 +331,12 @@
     show('state-error');
   }
 
+  // Base path injected by the server template. Falls back to '/' for local dev.
+  const BASE_PATH = '{{.BasePath}}' || '/';
+
   async function api(method, path) {
-    const res = await fetch(path, { method });
+    const url = BASE_PATH.replace(/\/$/, '') + path;
+    const res = await fetch(url, { method });
     if (!res.ok) {
       let msg = 'Request failed (' + res.status + ')';
       try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
