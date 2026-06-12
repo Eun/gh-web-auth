@@ -340,6 +340,45 @@ func handleReauth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// initConfig populates the package-level cfg from CLI flags.
+func initConfig(c *cli.Context) {
+	host := c.String("gh-host")
+
+	// Derive host-dependent URLs.
+	gitHostURL := "https://" + host
+	var apiRESTPrefix, graphQLURL string
+	if host == "github.com" {
+		apiRESTPrefix = "https://api.github.com/"
+		graphQLURL = "https://api.github.com/graphql"
+	} else {
+		apiRESTPrefix = "https://" + host + "/api/v3/"
+		graphQLURL = "https://" + host + "/api/graphql"
+	}
+
+	// Normalize base path: ensure it starts and ends with /.
+	basePath := c.String("base-path")
+	if !strings.HasPrefix(basePath, "/") {
+		basePath = "/" + basePath
+	}
+	if !strings.HasSuffix(basePath, "/") {
+		basePath += "/"
+	}
+
+	cfg = &AppConfig{
+		ListenAddr:    c.String("listen-addr"),
+		BasePath:      basePath,
+		GHConfigDir:   c.String("gh-config-dir"),
+		GitHost:       host,
+		GitHostURL:    gitHostURL,
+		APIRESTPrefix: apiRESTPrefix,
+		GraphQLURL:    graphQLURL,
+		ClientID:      c.String("gh-client-id"),
+		ClientSecret:  c.String("gh-client-secret"),
+		Scopes:        strings.Split(c.String("gh-scopes"), ","),
+		GitProtocol:   c.String("gh-git-protocol"),
+	}
+}
+
 func main() {
 	app := &cli.App{
 		Name:    "gh-web-auth",
@@ -396,42 +435,7 @@ func main() {
 			},
 		},
 		Action: func(c *cli.Context) error {
-			host := c.String("gh-host")
-
-			// Derive host-dependent URLs.
-			gitHostURL := "https://" + host
-			var apiRESTPrefix, graphQLURL string
-			if host == "github.com" {
-				apiRESTPrefix = "https://api.github.com/"
-				graphQLURL = "https://api.github.com/graphql"
-			} else {
-				apiRESTPrefix = "https://" + host + "/api/v3/"
-				graphQLURL = "https://" + host + "/api/graphql"
-			}
-
-			// Normalize base path: ensure it starts and ends with /.
-			basePath := c.String("base-path")
-			if !strings.HasPrefix(basePath, "/") {
-				basePath = "/" + basePath
-			}
-			if !strings.HasSuffix(basePath, "/") {
-				basePath = basePath + "/"
-			}
-
-			cfg = &AppConfig{
-				ListenAddr:    c.String("listen-addr"),
-				BasePath:      basePath,
-				GHConfigDir:   c.String("gh-config-dir"),
-				GitHost:       host,
-				GitHostURL:    gitHostURL,
-				APIRESTPrefix: apiRESTPrefix,
-				GraphQLURL:    graphQLURL,
-				ClientID:      c.String("gh-client-id"),
-				ClientSecret:  c.String("gh-client-secret"),
-				Scopes:        strings.Split(c.String("gh-scopes"), ","),
-				GitProtocol:   c.String("gh-git-protocol"),
-			}
-
+			initConfig(c)
 			// Propagate GH_CONFIG_DIR so ghconfig.go picks it up.
 			if cfg.GHConfigDir != "" {
 				os.Setenv("GH_CONFIG_DIR", cfg.GHConfigDir)
@@ -468,7 +472,7 @@ func main() {
 					return
 				}
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
-				w.Write(renderedIndexBytes)
+				_, _ = w.Write(renderedIndexBytes)
 			})
 
 			mux.HandleFunc("/api/status", handleStatus)
