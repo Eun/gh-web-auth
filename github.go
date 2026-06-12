@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,7 +12,7 @@ import (
 // validateToken checks whether the given token is valid by calling the GitHub API.
 // Returns the X-Oauth-Scopes header value and any error.
 func validateToken(token string) (scopes string, err error) {
-	req, err := http.NewRequest("GET", cfg.APIRESTPrefix, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, cfg.APIRESTPrefix, http.NoBody)
 	if err != nil {
 		return "", err
 	}
@@ -36,7 +37,7 @@ func validateToken(token string) (scopes string, err error) {
 // getViewerLogin queries the GitHub GraphQL API for the authenticated user's login name.
 func getViewerLogin(token string) (string, error) {
 	body := `{"query":"query { viewer { login } }"}`
-	req, err := http.NewRequest("POST", cfg.GraphQLURL, strings.NewReader(body))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, cfg.GraphQLURL, strings.NewReader(body))
 	if err != nil {
 		return "", err
 	}
