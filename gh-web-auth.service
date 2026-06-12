@@ -1,0 +1,15 @@
+[Unit]
+Description=GitHub CLI Web Authentication Daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/gh-web-auth -daemon
+Restart=on-failure
+RestartSec=5
+Environment=BROWSER=false
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
